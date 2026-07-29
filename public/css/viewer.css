@@ -251,6 +251,90 @@ button:focus-visible {
   font-variant-numeric: tabular-nums;
 }
 
+.dropzone {
+  position: absolute;
+  inset: 0;
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 2px dashed var(--accent);
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--bg) 72%, transparent);
+}
+
+.dropzone[hidden] {
+  display: none;
+}
+
+.dropzone__card {
+  padding: 22px 26px;
+  border-radius: 10px;
+  background: var(--panel);
+  text-align: center;
+}
+
+.dropzone__card p {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.dropzone__hint {
+  margin-top: 6px !important;
+  color: var(--muted);
+  font-size: 12px !important;
+  font-weight: 400 !important;
+}
+
+.panel__file {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid var(--line);
+  font-size: 12px;
+}
+
+.panel__file[hidden] {
+  display: none;
+}
+
+.panel__filename {
+  flex: 1;
+  overflow: hidden;
+  color: var(--accent);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.panel__file button {
+  padding: 2px 7px;
+  line-height: 1.2;
+}
+
+.panel__slider select {
+  width: 100%;
+  margin-top: 6px;
+  padding: 5px 6px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--control);
+  color: var(--text);
+  font: inherit;
+  font-size: 12px;
+}
+
+.panel__slider[hidden] {
+  display: none;
+}
+
+.panel__open {
+  width: 100%;
+  margin-top: 10px;
+}
+
 .modal {
   position: fixed;
   inset: 0;

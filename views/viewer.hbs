@@ -28,8 +28,8 @@
     <div class="app">
       <header class="topbar">
         <div class="topbar__title">
-          <h1>{{title}}</h1>
-          <p>
+          <h1 id="model-title">{{title}}</h1>
+          <p id="model-attribution">
             {{author}} ·
             <a href="{{licenseUrl}}" target="_blank" rel="noopener noreferrer">{{license}}</a> ·
             <a href="{{entryUrl}}" target="_blank" rel="noopener noreferrer" data-i18n="link.entry"
@@ -47,8 +47,8 @@
           </p>
         </div>
         <div class="topbar__stats">
-          <span data-i18n="stats.triangles" data-n="{{trianglesRaw}}">{{triangles}} triangles</span>
-          <span data-i18n="stats.bytes" data-n="{{megabytes}}" data-fmt="{{meshFormatLabel}}"
+          <span id="stat-triangles" data-i18n="stats.triangles" data-n="{{trianglesRaw}}">{{triangles}} triangles</span>
+          <span id="stat-bytes" data-i18n="stats.bytes" data-n="{{megabytes}}" data-fmt="{{meshFormatLabel}}"
             >{{megabytes}} MB {{meshFormatLabel}}</span
           >
           <button type="button" id="qr" class="chip" data-i18n-title="qr.title">QR</button>
@@ -76,6 +76,15 @@
               First load pulls {{megabytes}} MB from 3d.nih.gov and caches it on the server.
             </p>
           {{/if}}
+        </div>
+
+        <div class="dropzone" id="dropzone" hidden>
+          <div class="dropzone__card">
+            <p data-i18n="drop.title">Drop an STL or GLB file to view it</p>
+            <p class="dropzone__hint" data-i18n="drop.hint">
+              The file is read in your browser and never uploaded.
+            </p>
+          </div>
         </div>
 
         <div class="error" id="error" hidden>
@@ -116,10 +125,30 @@
             <span data-i18n="label.clip">Clip</span> <span id="clip-value">off</span>
             <input type="range" id="clip" min="0" max="100" value="100" />
           </label>
+          <div class="panel__file" id="file-row" hidden>
+            <span id="file-name" class="panel__filename"></span>
+            <button type="button" id="file-restore" data-i18n-title="file.restore">✕</button>
+          </div>
+
+          <label class="panel__slider" id="up-axis-row" hidden>
+            <span data-i18n="upaxis.label">Up axis</span>
+            <select id="up-axis">
+              <option value="y">+Y</option>
+              <option value="-y">−Y</option>
+              <option value="z">+Z</option>
+              <option value="-z">−Z</option>
+            </select>
+          </label>
+
           <dl class="panel__facts">
             <div><dt data-i18n="facts.size">Size</dt><dd id="fact-size">—</dd></div>
-            <div><dt data-i18n="facts.units">Units</dt><dd>{{units}}</dd></div>
+            <div><dt data-i18n="facts.units">Units</dt><dd id="fact-units">{{units}}</dd></div>
           </dl>
+
+          <button type="button" id="file-open" class="panel__open" data-i18n="file.open">
+            Open STL / GLB…
+          </button>
+          <input id="file-input" type="file" accept=".stl,.glb,model/stl,model/gltf-binary" hidden />
           <p class="panel__help" data-i18n="help">
             Drag to orbit · scroll to zoom · right-drag or two-finger drag to pan
           </p>
@@ -142,6 +171,7 @@
       data-mesh-url="{{meshUrl}}"
       data-mesh-format="{{meshFormat}}"
       data-up-axis="{{upAxis}}"
+      data-units="{{units}}"
     ></script>
   </body>
 </html>

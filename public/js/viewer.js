@@ -12,7 +12,7 @@ const meshUrl = config.meshUrl ?? '/api/model/mesh.stl';
 const meshFormat = config.meshFormat === 'glb' ? 'glb' : 'stl';
 /** Rotation about X that brings the file's up axis onto three.js' +Y. */
 const UP_AXIS_TILT = { y: 0, '-y': Math.PI, z: -Math.PI / 2, '-z': Math.PI / 2 };
-const upTilt = UP_AXIS_TILT[config.upAxis] ?? 0;
+let upTilt = UP_AXIS_TILT[config.upAxis] ?? 0;
 
 const THEMES = {
   dark: { background: 0x0d1014, grid: [0x35414f, 0x222a33], icon: '☾' },
@@ -45,6 +45,28 @@ const el = {
   qrCode: document.getElementById('qr-code'),
   qrUrl: document.getElementById('qr-url'),
   qrClose: document.getElementById('qr-close'),
+  dropzone: document.getElementById('dropzone'),
+  fileInput: document.getElementById('file-input'),
+  fileOpen: document.getElementById('file-open'),
+  fileRow: document.getElementById('file-row'),
+  fileName: document.getElementById('file-name'),
+  fileRestore: document.getElementById('file-restore'),
+  upAxis: document.getElementById('up-axis'),
+  upAxisRow: document.getElementById('up-axis-row'),
+  factUnits: document.getElementById('fact-units'),
+  modelTitle: document.getElementById('model-title'),
+  modelAttribution: document.getElementById('model-attribution'),
+  statTriangles: document.getElementById('stat-triangles'),
+  statBytes: document.getElementById('stat-bytes'),
+};
+
+/** The server-rendered description of the built-in model, for restoring it. */
+const ORIGINAL_HEADER = {
+  title: el.modelTitle.textContent,
+  attribution: el.modelAttribution.innerHTML,
+  triangles: el.statTriangles.dataset.n,
+  bytes: el.statBytes.dataset.n,
+  format: el.statBytes.dataset.fmt,
 };
 
 /* ------------------------------------------------------------------ i18n */
@@ -72,9 +94,12 @@ function applyLanguage() {
 /** Re-renders the strings that carry live values rather than static markup. */
 function refreshDynamicText() {
   if (modelSize) {
-    el.factSize.textContent = `${modelSize.x.toFixed(0)} × ${modelSize.z.toFixed(
-      0,
-    )} × ${modelSize.y.toFixed(0)} mm`;
+    const decimals = Math.max(...modelSize.toArray()) < 10 ? 2 : 0;
+    const size = [modelSize.x, modelSize.z, modelSize.y]
+      .map((n) => n.toFixed(decimals))
+      .join(' × ');
+    el.factSize.textContent = unitsLabel ? `${size} ${unitsLabel}` : size;
+    el.factUnits.textContent = unitsLabel ?? t('facts.unknown');
   }
   const clipPercent = Number(el.clip.value);
   el.clipValue.textContent = clipPercent >= 100 ? t('clip.off') : `${clipPercent}%`;
@@ -145,6 +170,12 @@ const view = { target: new THREE.Vector3(), distance: 10, height: 1 };
 let mesh = null;
 let grid = null;
 let modelSize = null;
+/** The pivot currently in the scene, so a replacement can dispose of it. */
+let modelRoot = null;
+/** Materials the section plane applies to; a dropped GLB brings its own. */
+let clippedMaterials = [material];
+/** null for dropped files: STL has no units and glTF's convention is metres. */
+let unitsLabel = config.units ?? 'mm';
 
 /* ------------------------------------------------------- render on demand */
 
@@ -290,29 +321,35 @@ async function fetchMesh() {
 }
 
 /**
- * Decodes the meshopt-compressed GLB produced by `npm run build:mesh`.
- * Loaded lazily so the STL path never pays for GLTFLoader.
+ * Decodes a GLB into a ready-to-place object. Loaded lazily so the STL path
+ * never pays for GLTFLoader.
+ *
+ * The whole scene is returned rather than one geometry: a dropped file may
+ * hold several meshes, and keeping the scene means node transforms come along
+ * for free — including the scale that KHR_mesh_quantization leaves on the node
+ * (positions are normalised Int16, so the bare geometry is ~2 units across
+ * rather than 66 mm, and baking the matrix in would corrupt the integers).
+ *
+ * `ownMaterials` keeps a dropped file looking like itself; the built-in cast
+ * has no material worth keeping, so it gets the viewer's.
  */
-async function parseGlb(buffer) {
+async function parseGlb(buffer, { ownMaterials = false } = {}) {
   const [{ GLTFLoader }, { MeshoptDecoder }] = await Promise.all([
     import('three/addons/loaders/GLTFLoader.js'),
     import('three/addons/libs/meshopt_decoder.module.js'),
   ]);
 
   const gltf = await new GLTFLoader().setMeshoptDecoder(MeshoptDecoder).parseAsync(buffer, '');
-  let mesh = null;
-  gltf.scene.traverse((object) => {
-    if (!mesh && object.isMesh) mesh = object;
-  });
-  if (!mesh) throw new Error('the GLB contains no mesh');
 
-  // Quantisation (KHR_mesh_quantization) stores positions as normalised Int16
-  // and leaves the real scale on the node — the bare geometry is ~2 units
-  // across, not 66 mm. The matrix is returned rather than baked in: baking it
-  // would corrupt the integer attribute, and the quantised form is half the
-  // GPU memory of Float32.
-  mesh.updateWorldMatrix(true, false);
-  return { geometry: mesh.geometry, matrix: mesh.matrixWorld.clone() };
+  let found = false;
+  gltf.scene.traverse((object) => {
+    if (!object.isMesh) return;
+    found = true;
+    if (!ownMaterials) object.material = material;
+  });
+  if (!found) throw new Error(t('error.noMesh'));
+
+  return gltf.scene;
 }
 
 /**
@@ -323,21 +360,23 @@ async function parseGlb(buffer) {
 function parseStl(buffer) {
   return new Promise((resolve, reject) => {
     let worker;
+    const onMainThread = () => new THREE.Mesh(new STLLoader().parse(buffer), material);
+
     if (!isBinaryStl(buffer)) {
-      resolve({ geometry: new STLLoader().parse(buffer), matrix: null });
+      resolve(onMainThread());
       return;
     }
     try {
       worker = new Worker('/static/js/stl-worker.js', { type: 'module' });
     } catch {
-      resolve({ geometry: new STLLoader().parse(buffer), matrix: null });
+      resolve(onMainThread());
       return;
     }
 
     worker.onerror = () => {
       worker.terminate();
       // Retry on the main thread only if the transfer has not detached it yet.
-      if (buffer.byteLength) resolve({ geometry: new STLLoader().parse(buffer), matrix: null });
+      if (buffer.byteLength) resolve(onMainThread());
       else reject(new Error(t('error.generic')));
     };
     worker.onmessage = ({ data }) => {
@@ -355,10 +394,155 @@ function parseStl(buffer) {
         new THREE.Vector3(...data.max),
       );
       geometry.boundingSphere = geometry.boundingBox.getBoundingSphere(new THREE.Sphere());
-      resolve({ geometry, matrix: null });
+      resolve(new THREE.Mesh(geometry, material));
     };
     worker.postMessage(buffer, [buffer]);
   });
+}
+
+/* ------------------------------------------------------- local file models */
+
+/** Every distinct material under an object, for the section-plane handler. */
+function collectMaterials(object) {
+  const found = new Set();
+  object.traverse((child) => {
+    if (!child.isMesh) return;
+    for (const m of Array.isArray(child.material) ? child.material : [child.material]) {
+      if (m) found.add(m);
+    }
+  });
+  return [...found];
+}
+
+/** Frees GPU buffers before swapping in a different model. */
+function clearModel() {
+  if (modelRoot) {
+    modelRoot.traverse((child) => {
+      if (!child.isMesh) return;
+      child.geometry.dispose();
+      for (const m of Array.isArray(child.material) ? child.material : [child.material]) {
+        // The viewer's own material is shared and outlives every model.
+        if (m && m !== material) m.dispose();
+      }
+    });
+    scene.remove(modelRoot);
+    modelRoot = null;
+  }
+  if (grid) {
+    grid.material.dispose();
+    scene.remove(grid);
+    grid = null;
+  }
+  mesh = null;
+  modelSize = null;
+  clippedMaterials = [material];
+}
+
+/**
+ * Reads a dropped or picked file. Nothing is uploaded: the bytes are read with
+ * FileReader/arrayBuffer and parsed in this tab, so the model never leaves the
+ * machine.
+ */
+async function loadLocalFile(file) {
+  el.error.hidden = true;
+  el.loader.hidden = false;
+  el.loaderBar.style.width = '100%';
+  el.loaderLabel.textContent = t('loading.reading', file.name);
+
+  try {
+    const buffer = await file.arrayBuffer();
+    const kind = detectFormat(buffer, file.name);
+    if (!kind) throw new Error(t('error.unsupported'));
+
+    // Uploads carry no orientation metadata: glTF is defined Y-up, while STL
+    // has no convention beyond "Z-up" being usual for printing. The panel's
+    // up-axis control is there because neither guess is reliable.
+    const guessedAxis = kind === 'glb' ? 'y' : 'z';
+    el.upAxis.value = guessedAxis;
+    upTilt = UP_AXIS_TILT[guessedAxis];
+
+    el.loaderLabel.textContent = t('loading.building');
+    await new Promise((resolve) => requestAnimationFrame(() => setTimeout(resolve, 0)));
+
+    const object = kind === 'glb' ? await parseGlb(buffer, { ownMaterials: true }) : await parseStl(buffer);
+
+    clearModel();
+    // Before addMesh: it refreshes the readouts, which depend on this state.
+    setCustomFile(file, object);
+    addMesh(object);
+    applyLanguage(); // repaints the header stats from their new data-* values
+    el.loader.hidden = true;
+    modelLoaded = true;
+    el.panelToggle.hidden = false;
+    setPanelOpen(localStorage.getItem('viewer.panel') !== 'closed');
+  } catch (error) {
+    el.loader.hidden = true;
+    el.errorMessage.textContent = error instanceof Error ? error.message : t('error.generic');
+    el.error.hidden = false;
+  }
+}
+
+/** Sniffs the container from its magic bytes, falling back to the extension. */
+function detectFormat(buffer, name) {
+  if (buffer.byteLength >= 12) {
+    const magic = String.fromCharCode(...new Uint8Array(buffer, 0, 4));
+    if (magic === 'glTF') return 'glb';
+  }
+  if (isBinaryStl(buffer)) return 'stl';
+
+  const head = String.fromCharCode(...new Uint8Array(buffer, 0, Math.min(6, buffer.byteLength)));
+  if (head.toLowerCase().startsWith('solid')) return 'stl'; // ASCII STL
+
+  const ext = name.toLowerCase().split('.').pop();
+  return ext === 'glb' ? 'glb' : ext === 'stl' ? 'stl' : null;
+}
+
+/**
+ * Swaps the header between the built-in model and a dropped file. Leaving the
+ * NIH attribution and triangle count in place would describe a model that is
+ * no longer on screen.
+ */
+function setCustomFile(file, object) {
+  el.fileRow.hidden = file === null;
+  el.upAxisRow.hidden = file === null;
+  unitsLabel = file === null ? (config.units ?? 'mm') : null;
+
+  if (file === null) {
+    el.fileName.textContent = '';
+    el.modelTitle.textContent = ORIGINAL_HEADER.title;
+    el.modelAttribution.innerHTML = ORIGINAL_HEADER.attribution;
+    el.statTriangles.dataset.n = ORIGINAL_HEADER.triangles;
+    el.statBytes.dataset.n = ORIGINAL_HEADER.bytes;
+    el.statBytes.dataset.fmt = ORIGINAL_HEADER.format;
+    return;
+  }
+
+  el.fileName.textContent = file.name;
+  el.fileName.title = file.name;
+  el.modelTitle.textContent = file.name;
+  el.modelAttribution.textContent = t('file.local');
+  el.statTriangles.dataset.n = String(countTriangles(object));
+  el.statBytes.dataset.n = (file.size / 1024 / 1024).toFixed(1);
+  el.statBytes.dataset.fmt = file.name.toLowerCase().endsWith('.glb') ? 'GLB' : 'STL';
+}
+
+function countTriangles(object) {
+  let total = 0;
+  object.traverse((child) => {
+    if (!child.isMesh) return;
+    const geometry = child.geometry;
+    total += (geometry.index ? geometry.index.count : geometry.attributes.position.count) / 3;
+  });
+  return Math.round(total);
+}
+
+/** Restores the model this page was built for. */
+async function restoreOriginal() {
+  clearModel();
+  upTilt = UP_AXIS_TILT[config.upAxis] ?? 0;
+  setCustomFile(null);
+  applyLanguage();
+  await load();
 }
 
 function addGrid() {
@@ -371,39 +555,61 @@ function addGrid() {
   scene.add(grid);
 }
 
-function addMesh({ geometry, matrix }) {
-  // Both are already supplied by the worker; this covers the fallback parser.
-  if (!geometry.boundingBox) geometry.computeBoundingBox();
-  if (!geometry.attributes.normal) geometry.computeVertexNormals();
+function addMesh(object) {
+  object.traverse((child) => {
+    if (!child.isMesh) return;
+    const geometry = child.geometry;
+    // Normally supplied by the worker already; this covers the other parsers.
+    if (!geometry.boundingBox) geometry.computeBoundingBox();
+    if (!geometry.attributes.normal) geometry.computeVertexNormals();
+  });
 
-  mesh = new THREE.Mesh(geometry, material);
-  if (matrix) mesh.applyMatrix4(matrix);
+  mesh = object;
+  clippedMaterials = collectMaterials(object);
 
   // Recentring happens on the object, not with geometry.translate(), which
   // would rewrite every vertex on the main thread. Three levels: the pivot
-  // tilts the model upright, the middle group centres it, the mesh keeps any
+  // tilts the model upright, the middle group centres it, the object keeps any
   // transform the source file carried.
-  const centring = new THREE.Group().add(mesh);
-  const center = new THREE.Box3().setFromObject(mesh).getCenter(new THREE.Vector3());
+  const centring = new THREE.Group().add(object);
+  const center = new THREE.Box3().setFromObject(object).getCenter(new THREE.Vector3());
   centring.position.copy(center).negate();
 
   const pivot = new THREE.Group();
   pivot.rotation.x = upTilt;
   pivot.add(centring);
   scene.add(pivot);
+  modelRoot = pivot;
 
-  const bounds = new THREE.Box3().setFromObject(pivot);
+  refreshFraming();
+}
+
+/** Re-measures the model and reframes the camera, grid and zoom limits. */
+function refreshFraming() {
+  const bounds = new THREE.Box3().setFromObject(modelRoot);
   modelSize = bounds.getSize(new THREE.Vector3());
   view.target.copy(bounds.getCenter(new THREE.Vector3()));
   view.distance = Math.max(modelSize.x, modelSize.y, modelSize.z) * 1.9;
   view.height = modelSize.y;
 
+  if (grid) {
+    grid.material.dispose();
+    scene.remove(grid);
+  }
   addGrid();
 
   controls.minDistance = view.distance * 0.05;
   controls.maxDistance = view.distance * 6;
   setView('reset');
   refreshDynamicText();
+}
+
+/** Re-tilts an already-loaded model without re-parsing it. */
+function applyUpAxis(axis) {
+  upTilt = UP_AXIS_TILT[axis] ?? 0;
+  if (!modelRoot) return;
+  modelRoot.rotation.x = upTilt;
+  refreshFraming();
 }
 
 async function load() {
@@ -421,9 +627,9 @@ async function load() {
     await new Promise((resolve) => requestAnimationFrame(() => setTimeout(resolve, 0)));
 
     const tParse = performance.now();
-    const geometry = meshFormat === 'glb' ? await parseGlb(buffer) : await parseStl(buffer);
+    const object = meshFormat === 'glb' ? await parseGlb(buffer) : await parseStl(buffer);
     const tAdd = performance.now();
-    addMesh(geometry);
+    addMesh(object);
     const tDone = performance.now();
     window.__timing = {
       fetch: Math.round(tParse - tFetch),
@@ -513,9 +719,11 @@ function bindControls() {
     // The clipping shader path and double-sided rendering are only paid for
     // while the section plane is actually in use.
     renderer.localClippingEnabled = !off;
-    material.clippingPlanes = off ? null : [clipPlane];
-    material.side = off ? THREE.FrontSide : THREE.DoubleSide;
-    material.needsUpdate = true;
+    for (const target of clippedMaterials) {
+      target.clippingPlanes = off ? null : [clipPlane];
+      target.side = off ? THREE.FrontSide : THREE.DoubleSide;
+      target.needsUpdate = true;
+    }
     if (!off) {
       // Plane normal is -Y, so constant = cut height keeps everything below it.
       clipPlane.constant = view.target.y - view.height / 2 + (view.height * percent) / 100;
@@ -537,6 +745,40 @@ function bindControls() {
   });
 
   el.retry.addEventListener('click', load);
+
+  el.fileOpen.addEventListener('click', () => el.fileInput.click());
+  el.fileInput.addEventListener('change', () => {
+    const [file] = el.fileInput.files;
+    if (file) void loadLocalFile(file);
+    el.fileInput.value = ''; // so picking the same file twice still fires
+  });
+  el.fileRestore.addEventListener('click', () => void restoreOriginal());
+  el.upAxis.addEventListener('change', () => applyUpAxis(el.upAxis.value));
+
+  // Drag and drop. dragover must be cancelled or the browser navigates to the
+  // file instead of handing it over. Counting enter/leave avoids the overlay
+  // flickering as the pointer crosses child elements.
+  let dragDepth = 0;
+  window.addEventListener('dragenter', (event) => {
+    if (!event.dataTransfer?.types.includes('Files')) return;
+    event.preventDefault();
+    dragDepth += 1;
+    el.dropzone.hidden = false;
+  });
+  window.addEventListener('dragover', (event) => {
+    if (event.dataTransfer?.types.includes('Files')) event.preventDefault();
+  });
+  window.addEventListener('dragleave', () => {
+    dragDepth = Math.max(0, dragDepth - 1);
+    if (dragDepth === 0) el.dropzone.hidden = true;
+  });
+  window.addEventListener('drop', (event) => {
+    if (!event.dataTransfer?.files.length) return;
+    event.preventDefault();
+    dragDepth = 0;
+    el.dropzone.hidden = true;
+    void loadLocalFile(event.dataTransfer.files[0]);
+  });
 
   el.qr.addEventListener('click', openQr);
   el.qrClose.addEventListener('click', closeQr);

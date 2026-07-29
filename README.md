@@ -51,6 +51,14 @@ installed `three` package.
 - Drag to orbit, scroll to zoom, right-drag to pan.
 - View presets (reset / occlusal / front / side), auto-rotate, ground grid, section-plane slider.
 - Panel can be hidden with its toggle or the `H` key.
+- **Drop an STL or GLB onto the page** (or use *Open STL / GLB…*) to view your own model. The
+  file is read with `File.arrayBuffer()` and parsed in the tab — nothing is uploaded, and the
+  static deployment has no endpoint that could accept an upload. Binary and ASCII STL and
+  self-contained GLB are supported; `.gltf` with external buffers is not.
+  - Neither format carries reliable orientation or units, so the panel gains an **up-axis**
+    selector (default: +Z for STL, +Y for GLB per the glTF spec) and the units readout switches
+    to *unknown*. The header swaps to the file name so the NIH attribution never describes
+    someone else's model.
 - **QR** button renders a QR code for the page's own address, for handing the viewer to a phone
   mid-demo. It encodes `location.origin + location.pathname` at runtime, so it follows whatever
   host the page is served from, and prints the URL underneath — which also makes it obvious when
