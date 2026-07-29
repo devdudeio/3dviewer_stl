@@ -15,7 +15,14 @@ const projectRoot = join(__dirname, '..');
       {
         rootPath: join(projectRoot, 'public'),
         serveRoot: '/static',
-        serveStaticOptions: { index: false, maxAge: '1h' },
+        // These files are not fingerprinted, so they must revalidate on every
+        // load. A far-future max-age here pins clients to a stale viewer.js
+        // long after a deploy; ETags make revalidation cheap (304, no body).
+        serveStaticOptions: {
+          index: false,
+          etag: true,
+          setHeaders: (res) => res.setHeader('Cache-Control', 'no-cache'),
+        },
       },
       // three.js ships browser-ready ES modules; serving them straight from
       // node_modules keeps the client bundler-free and CDN-free.

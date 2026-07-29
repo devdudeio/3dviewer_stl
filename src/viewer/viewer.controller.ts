@@ -1,4 +1,4 @@
-import { Controller, Get, Render } from '@nestjs/common';
+import { Controller, Get, Header, Render } from '@nestjs/common';
 
 import { ModelService } from '../model/model.service';
 
@@ -7,6 +7,7 @@ export class ViewerController {
   constructor(private readonly models: ModelService) {}
 
   @Get()
+  @Header('Cache-Control', 'no-cache')
   @Render('viewer')
   viewer() {
     const m = this.models.descriptor;

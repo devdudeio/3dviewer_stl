@@ -11,6 +11,7 @@ const deNumber = new Intl.NumberFormat('de-DE');
 export const STRINGS = {
   en: {
     'link.entry': 'NIH 3D entry',
+    'app.code': 'Viewer code: MIT © 2026 Robert Lech',
     'stats.triangles': (n) => `${enNumber.format(Number(n))} triangles`,
     'stats.bytes': (n) => `${n} MB STL`,
     'lang.title': 'Switch to German',
@@ -36,10 +37,11 @@ export const STRINGS = {
     'clip.off': 'off',
     'facts.size': 'Size',
     'facts.units': 'Units',
-    help: 'Drag to orbit · scroll to zoom · right-drag or two-finger drag to pan',
+    help: 'Drag to orbit · scroll to zoom · right-drag or two-finger drag to pan. Press H or ☰ to hide this panel.',
   },
   de: {
     'link.entry': 'NIH-3D-Eintrag',
+    'app.code': 'Viewer-Code: MIT © 2026 Robert Lech',
     'stats.triangles': (n) => `${deNumber.format(Number(n))} Dreiecke`,
     'stats.bytes': (n) => `${n} MB STL`,
     'lang.title': 'Auf Englisch umschalten',
@@ -66,6 +68,6 @@ export const STRINGS = {
     'clip.off': 'aus',
     'facts.size': 'Größe',
     'facts.units': 'Einheiten',
-    help: 'Ziehen zum Drehen · Scrollen zum Zoomen · Rechtsziehen oder Zwei-Finger-Ziehen zum Verschieben',
+    help: 'Ziehen zum Drehen · Scrollen zum Zoomen · Rechtsziehen oder Zwei-Finger-Ziehen zum Verschieben. Mit H oder ☰ das Bedienfeld ausblenden.',
   },
 };
