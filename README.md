@@ -16,8 +16,19 @@ npm install
 npm run start:dev     # http://localhost:3000
 ```
 
-First page load takes as long as the upstream download; subsequent loads are served from
-`.cache/models/`.
+The page loads whichever mesh is available:
+
+- **`public/models/*.glb`** — the compressed build artefact, committed to the repo. Used when
+  present (5.6 MB, loads in ~200 ms).
+- **the STL** — otherwise the server downloads 91 MB from NIH 3D on first request and caches it
+  in `.cache/models/`.
+
+To regenerate the compressed mesh (needs the STL, which it downloads if missing):
+
+```bash
+npm run build:mesh              # lossless: 1.9M triangles, 5.9 MB
+npm run build:mesh -- --ratio 0.35   # simplified: 666k triangles, 2.3 MB
+```
 
 ## Routes
 
@@ -77,6 +88,60 @@ What does the work:
   lag no matter how fast the renderer is.
 
 `window.__viewer` and `window.__timing` are exposed for profiling in the console.
+
+### Payload
+
+`scripts/build-mesh.mjs` converts the STL to a meshopt-compressed GLB. The STL stores three
+unshared vertices per triangle with a flat face normal each, so dropping the normals lets the
+weld merge 5.7M vertices down to 951k; smooth normals are then recomputed (gltf-transform's
+`normals()` cannot be used — it un-indexes the primitive, undoing the weld).
+
+| Output                     | Triangles | Size    | vs STL |
+| -------------------------- | --------- | ------- | ------ |
+| STL (source)               | 1,902,630 | 91 MB   | —      |
+| GLB, `--ratio 1` (default) | 1,902,630 | 5.9 MB  | 16×    |
+| GLB, `--ratio 0.35`        | 665,920   | 2.3 MB  | 41×    |
+| GLB, `--ratio 0.15`        | 285,394   | 1.1 MB  | 85×    |
+
+Load time on localhost went from 400 ms (fetch 341 + parse 33) to 73 ms (fetch 30 + parse 42).
+Positions stay quantised as normalised `Int16` — half the GPU memory of `Float32` — so the
+viewer carries the node's scale on the object instead of baking it into the attribute.
+
+## Deploying to Vercel (free tier)
+
+The server design cannot be deployed as-is, for two reasons worth knowing before you try:
+
+- A Vercel Function caps its **response body at 4.5 MB**, and the STL route streams 69 MB.
+- **3d.nih.gov sends no CORS headers**, so the browser cannot fetch the mesh directly either
+  (verified: `GET` with an `Origin` returns 200 with no `access-control-allow-origin`, and the
+  preflight answers 204 with only `allow: GET, HEAD, OPTIONS`).
+
+So the deployment is fully static — no functions, nothing to time out, nothing to cap:
+
+```bash
+npm run build:mesh      # only when the mesh changes; the .glb is committed
+npm run build:static    # prerenders the page into out/  (8.3 MB total)
+```
+
+`out/` contains `index.html`, the viewer assets, the GLB, and the eight three.js modules the
+page actually imports. `vercel.json` already sets the build command, the output directory, and
+cache headers (immutable for the content-hashed GLB, revalidate for the rest).
+
+Then either:
+
+- **Dashboard**: import `devdudeio/3dviewer_stl` at vercel.com/new. It reads `vercel.json`, so
+  leave the framework preset on "Other" and don't override anything.
+- **CLI**: `npx vercel` (preview) and `npx vercel --prod` (production).
+
+Hobby-plan headroom: 8.3 MB per cold visitor against 100 GB/month of transfer is roughly 12,000
+full loads, and repeat visits re-download nothing but the HTML.
+
+Note the Hobby plan cannot connect repositories owned by a GitHub *organization* — `devdudeio`
+is a personal account, so this repo is fine.
+
+If you would rather not commit a 5.6 MB binary, drop `public/models/` from git and change the
+Vercel build command to `npm run build:mesh && npm run build:static`; the build container then
+pulls the STL from NIH 3D on every deploy, which costs about a minute and depends on NIH being up.
 
 ## Configuration
 

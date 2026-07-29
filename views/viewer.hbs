@@ -48,7 +48,9 @@
         </div>
         <div class="topbar__stats">
           <span data-i18n="stats.triangles" data-n="{{trianglesRaw}}">{{triangles}} triangles</span>
-          <span data-i18n="stats.bytes" data-n="{{megabytes}}">{{megabytes}} MB STL</span>
+          <span data-i18n="stats.bytes" data-n="{{megabytes}}" data-fmt="{{meshFormatLabel}}"
+            >{{megabytes}} MB {{meshFormatLabel}}</span
+          >
           <button type="button" id="lang" class="chip" data-i18n-title="lang.title">DE</button>
           <button type="button" id="theme" class="chip" data-i18n-title="theme.title" aria-label="theme">
             <span aria-hidden="true" id="theme-icon">☾</span>
@@ -61,12 +63,18 @@
 
         <div class="loader" id="loader" role="status" aria-live="polite">
           <p class="loader__label" id="loader-label" data-i18n="loading.fetch">
-            Fetching model from NIH 3D…
+            Loading model…
           </p>
           <div class="loader__track"><div class="loader__bar" id="loader-bar"></div></div>
-          <p class="loader__hint" data-i18n="loading.hint" data-n="{{megabytes}}">
-            First load pulls {{megabytes}} MB from 3d.nih.gov and caches it on the server.
-          </p>
+          {{#if isPrebuilt}}
+            <p class="loader__hint" data-i18n="loading.hintGlb" data-n="{{megabytes}}">
+              Streaming a {{megabytes}} MB compressed mesh built from the NIH 3D original.
+            </p>
+          {{else}}
+            <p class="loader__hint" data-i18n="loading.hint" data-n="{{megabytes}}">
+              First load pulls {{megabytes}} MB from 3d.nih.gov and caches it on the server.
+            </p>
+          {{/if}}
         </div>
 
         <div class="error" id="error" hidden>
@@ -122,6 +130,7 @@
       type="module"
       src="/static/js/viewer.js"
       data-mesh-url="{{meshUrl}}"
+      data-mesh-format="{{meshFormat}}"
       data-up-axis="{{upAxis}}"
     ></script>
   </body>

@@ -13,7 +13,13 @@ import {
   ServiceUnavailableException,
 } from '@nestjs/common';
 
-import { MODEL_CACHE_DIR, ModelDescriptor, TOOTH_MODEL } from './model.constants';
+import {
+  MODEL_CACHE_DIR,
+  ModelDescriptor,
+  PREBUILT_MESH_DIR,
+  PrebuiltMesh,
+  TOOTH_MODEL,
+} from './model.constants';
 
 /** What we persist next to the cached mesh so restarts don't re-hash it. */
 interface CachedModelMeta {
@@ -41,10 +47,36 @@ export class ModelService {
   private downloadInFlight?: Promise<CachedModel>;
   private gzipInFlight?: Promise<string>;
 
-  constructor(@Inject(MODEL_CACHE_DIR) private readonly cacheDir: string) {}
+  private prebuilt?: PrebuiltMesh | null;
+
+  constructor(
+    @Inject(MODEL_CACHE_DIR) private readonly cacheDir: string,
+    @Inject(PREBUILT_MESH_DIR) private readonly prebuiltDir: string = '',
+  ) {}
 
   get descriptor(): ModelDescriptor {
     return this.model;
+  }
+
+  /**
+   * The compressed GLB from `npm run build:mesh`, if it has been generated.
+   * When present the page loads that instead of the 91 MB STL — it is also the
+   * only form that can be hosted statically. Resolved once and remembered.
+   */
+  async getPrebuilt(): Promise<PrebuiltMesh | undefined> {
+    if (this.prebuilt !== undefined) return this.prebuilt ?? undefined;
+
+    try {
+      const manifest = await readFile(join(this.prebuiltDir, `${this.model.id}.json`), 'utf8');
+      this.prebuilt = JSON.parse(manifest) as PrebuiltMesh;
+      this.logger.log(
+        `Serving prebuilt mesh ${this.prebuilt.file} (${Math.round(this.prebuilt.bytes / 1024)} KB)`,
+      );
+    } catch {
+      this.prebuilt = null;
+      this.logger.log('No prebuilt mesh found; serving the STL from cache');
+    }
+    return this.prebuilt ?? undefined;
   }
 
   private get meshPath(): string {

@@ -13,8 +13,9 @@ export class ModelController {
   /** Everything the client needs to label and scale the model. */
   @Get('metadata')
   @Header('Cache-Control', 'public, max-age=3600')
-  metadata() {
+  async metadata() {
     const m = this.models.descriptor;
+    const prebuilt = await this.models.getPrebuilt();
     return {
       id: m.id,
       title: m.title,
@@ -22,12 +23,30 @@ export class ModelController {
       license: m.license,
       licenseUrl: m.licenseUrl,
       entryUrl: m.entryUrl,
-      format: m.format,
       units: m.units,
       upAxis: m.upAxis,
-      triangles: m.triangles,
-      bytes: m.expectedBytes,
-      meshUrl: `/api/model/${m.id}.stl`,
+      source: {
+        format: m.format,
+        triangles: m.triangles,
+        bytes: m.expectedBytes,
+        url: `/api/model/${m.id}.stl`,
+      },
+      // What the page actually loads: the compressed build artefact when it
+      // exists, otherwise the raw STL.
+      mesh: prebuilt
+        ? {
+            format: 'glb',
+            triangles: prebuilt.triangles,
+            bytes: prebuilt.bytes,
+            simplifyRatio: prebuilt.simplifyRatio,
+            url: `/static/models/${prebuilt.file}`,
+          }
+        : {
+            format: m.format,
+            triangles: m.triangles,
+            bytes: m.expectedBytes,
+            url: `/api/model/${m.id}.stl`,
+          },
     };
   }
 

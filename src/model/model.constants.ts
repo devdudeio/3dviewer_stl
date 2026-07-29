@@ -46,3 +46,13 @@ export const TOOTH_MODEL: ModelDescriptor = {
 };
 
 export const MODEL_CACHE_DIR = 'MODEL_CACHE_DIR';
+export const PREBUILT_MESH_DIR = 'PREBUILT_MESH_DIR';
+
+/** Manifest written by scripts/build-mesh.mjs next to the compressed GLB. */
+export interface PrebuiltMesh {
+  file: string;
+  bytes: number;
+  triangles: number;
+  vertices: number;
+  simplifyRatio: number;
+}

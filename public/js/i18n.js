@@ -12,14 +12,17 @@ export const STRINGS = {
   en: {
     'link.entry': 'NIH 3D entry',
     'app.code': 'Viewer code: MIT © 2026 Robert Lech',
-    'stats.triangles': (n) => `${enNumber.format(Number(n))} triangles`,
-    'stats.bytes': (n) => `${n} MB STL`,
+    'stats.triangles': ({ n }) => `${enNumber.format(Number(n))} triangles`,
+    'stats.bytes': ({ n, fmt }) => `${n} MB ${fmt}`,
     'lang.title': 'Switch to German',
     'theme.title': 'Toggle light / dark theme',
     'panel.hide': 'Hide panel (H)',
     'panel.show': 'Show panel (H)',
-    'loading.fetch': 'Fetching model from NIH 3D…',
-    'loading.hint': (n) => `First load pulls ${n} MB from 3d.nih.gov and caches it on the server.`,
+    'loading.fetch': 'Loading model…',
+    'loading.hint': ({ n }) =>
+      `First load pulls ${n} MB from 3d.nih.gov and caches it on the server.`,
+    'loading.hintGlb': ({ n }) =>
+      `Streaming a ${n} MB compressed mesh built from the NIH 3D original.`,
     'loading.building': 'Building geometry…',
     'loading.progress': ([received, total]) => `Downloading ${received} of ${total}`,
     'loading.progressUnknown': (received) => `Downloading ${received}`,
@@ -42,15 +45,17 @@ export const STRINGS = {
   de: {
     'link.entry': 'NIH-3D-Eintrag',
     'app.code': 'Viewer-Code: MIT © 2026 Robert Lech',
-    'stats.triangles': (n) => `${deNumber.format(Number(n))} Dreiecke`,
-    'stats.bytes': (n) => `${n} MB STL`,
+    'stats.triangles': ({ n }) => `${deNumber.format(Number(n))} Dreiecke`,
+    'stats.bytes': ({ n, fmt }) => `${n} MB ${fmt}`,
     'lang.title': 'Auf Englisch umschalten',
     'theme.title': 'Helles / dunkles Design umschalten',
     'panel.hide': 'Bedienfeld ausblenden (H)',
     'panel.show': 'Bedienfeld einblenden (H)',
-    'loading.fetch': 'Modell wird von NIH 3D geladen…',
-    'loading.hint': (n) =>
+    'loading.fetch': 'Modell wird geladen…',
+    'loading.hint': ({ n }) =>
       `Beim ersten Laden werden ${n} MB von 3d.nih.gov geholt und auf dem Server zwischengespeichert.`,
+    'loading.hintGlb': ({ n }) =>
+      `Es werden ${n} MB komprimierte Geometrie geladen, erzeugt aus dem NIH-3D-Original.`,
     'loading.building': 'Geometrie wird aufgebaut…',
     'loading.progress': ([received, total]) => `${received} von ${total} geladen`,
     'loading.progressUnknown': (received) => `${received} geladen`,

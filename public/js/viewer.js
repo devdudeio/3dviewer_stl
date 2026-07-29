@@ -4,9 +4,12 @@ import { STLLoader } from 'three/addons/loaders/STLLoader.js';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 
 import { STRINGS } from './i18n.js';
+import { isBinaryStl } from './stl-parse.js';
 
 const config = document.querySelector('script[data-mesh-url]')?.dataset ?? {};
 const meshUrl = config.meshUrl ?? '/api/model/mesh.stl';
+/** 'glb' for the compressed build artefact, 'stl' for the raw NIH download. */
+const meshFormat = config.meshFormat === 'glb' ? 'glb' : 'stl';
 /** Rotation about X that brings the file's up axis onto three.js' +Y. */
 const UP_AXIS_TILT = { y: 0, '-y': Math.PI, z: -Math.PI / 2, '-z': Math.PI / 2 };
 const upTilt = UP_AXIS_TILT[config.upAxis] ?? 0;
@@ -48,14 +51,10 @@ function t(key, args) {
   return typeof entry === 'function' ? entry(args) : entry;
 }
 
-function localeNumber(value) {
-  return new Intl.NumberFormat(lang === 'de' ? 'de-DE' : 'en-US').format(value);
-}
-
 function applyLanguage() {
   document.documentElement.lang = lang;
   for (const node of document.querySelectorAll('[data-i18n]')) {
-    node.textContent = t(node.dataset.i18n, node.dataset.n);
+    node.textContent = t(node.dataset.i18n, node.dataset);
   }
   for (const node of document.querySelectorAll('[data-i18n-title]')) {
     node.title = t(node.dataset.i18nTitle);
@@ -285,13 +284,30 @@ async function fetchMesh() {
   return joined.buffer;
 }
 
-/** True for a binary STL whose triangle count matches its byte length. */
-function isWellFormedBinaryStl(buffer) {
-  if (buffer.byteLength < 84) return false;
-  const header = new Uint8Array(buffer, 0, 5);
-  if (String.fromCharCode(...header).toLowerCase() === 'solid') return false;
-  const triangles = new DataView(buffer).getUint32(80, true);
-  return buffer.byteLength === 84 + triangles * 50;
+/**
+ * Decodes the meshopt-compressed GLB produced by `npm run build:mesh`.
+ * Loaded lazily so the STL path never pays for GLTFLoader.
+ */
+async function parseGlb(buffer) {
+  const [{ GLTFLoader }, { MeshoptDecoder }] = await Promise.all([
+    import('three/addons/loaders/GLTFLoader.js'),
+    import('three/addons/libs/meshopt_decoder.module.js'),
+  ]);
+
+  const gltf = await new GLTFLoader().setMeshoptDecoder(MeshoptDecoder).parseAsync(buffer, '');
+  let mesh = null;
+  gltf.scene.traverse((object) => {
+    if (!mesh && object.isMesh) mesh = object;
+  });
+  if (!mesh) throw new Error('the GLB contains no mesh');
+
+  // Quantisation (KHR_mesh_quantization) stores positions as normalised Int16
+  // and leaves the real scale on the node — the bare geometry is ~2 units
+  // across, not 66 mm. The matrix is returned rather than baked in: baking it
+  // would corrupt the integer attribute, and the quantised form is half the
+  // GPU memory of Float32.
+  mesh.updateWorldMatrix(true, false);
+  return { geometry: mesh.geometry, matrix: mesh.matrixWorld.clone() };
 }
 
 /**
@@ -299,24 +315,24 @@ function isWellFormedBinaryStl(buffer) {
  * The buffer is only transferred once we know the worker can handle it, so the
  * main-thread fallback always has an intact buffer to work with.
  */
-function parseGeometry(buffer) {
+function parseStl(buffer) {
   return new Promise((resolve, reject) => {
     let worker;
-    if (!isWellFormedBinaryStl(buffer)) {
-      resolve(new STLLoader().parse(buffer));
+    if (!isBinaryStl(buffer)) {
+      resolve({ geometry: new STLLoader().parse(buffer), matrix: null });
       return;
     }
     try {
-      worker = new Worker('/static/js/stl-worker.js');
+      worker = new Worker('/static/js/stl-worker.js', { type: 'module' });
     } catch {
-      resolve(new STLLoader().parse(buffer));
+      resolve({ geometry: new STLLoader().parse(buffer), matrix: null });
       return;
     }
 
     worker.onerror = () => {
       worker.terminate();
       // Retry on the main thread only if the transfer has not detached it yet.
-      if (buffer.byteLength) resolve(new STLLoader().parse(buffer));
+      if (buffer.byteLength) resolve({ geometry: new STLLoader().parse(buffer), matrix: null });
       else reject(new Error(t('error.generic')));
     };
     worker.onmessage = ({ data }) => {
@@ -334,7 +350,7 @@ function parseGeometry(buffer) {
         new THREE.Vector3(...data.max),
       );
       geometry.boundingSphere = geometry.boundingBox.getBoundingSphere(new THREE.Sphere());
-      resolve(geometry);
+      resolve({ geometry, matrix: null });
     };
     worker.postMessage(buffer, [buffer]);
   });
@@ -350,21 +366,25 @@ function addGrid() {
   scene.add(grid);
 }
 
-function addMesh(geometry) {
+function addMesh({ geometry, matrix }) {
   // Both are already supplied by the worker; this covers the fallback parser.
   if (!geometry.boundingBox) geometry.computeBoundingBox();
   if (!geometry.attributes.normal) geometry.computeVertexNormals();
 
-  const center = geometry.boundingBox.getCenter(new THREE.Vector3());
-
-  // Recentre with an object-space offset rather than geometry.translate(),
-  // which would rewrite all 5.7M vertices on the main thread. The pivot then
-  // applies the up-axis tilt around that centre.
   mesh = new THREE.Mesh(geometry, material);
-  mesh.position.copy(center).negate();
+  if (matrix) mesh.applyMatrix4(matrix);
+
+  // Recentring happens on the object, not with geometry.translate(), which
+  // would rewrite every vertex on the main thread. Three levels: the pivot
+  // tilts the model upright, the middle group centres it, the mesh keeps any
+  // transform the source file carried.
+  const centring = new THREE.Group().add(mesh);
+  const center = new THREE.Box3().setFromObject(mesh).getCenter(new THREE.Vector3());
+  centring.position.copy(center).negate();
+
   const pivot = new THREE.Group();
   pivot.rotation.x = upTilt;
-  pivot.add(mesh);
+  pivot.add(centring);
   scene.add(pivot);
 
   const bounds = new THREE.Box3().setFromObject(pivot);
@@ -396,7 +416,7 @@ async function load() {
     await new Promise((resolve) => requestAnimationFrame(() => setTimeout(resolve, 0)));
 
     const tParse = performance.now();
-    const geometry = await parseGeometry(buffer);
+    const geometry = meshFormat === 'glb' ? await parseGlb(buffer) : await parseStl(buffer);
     const tAdd = performance.now();
     addMesh(geometry);
     const tDone = performance.now();
