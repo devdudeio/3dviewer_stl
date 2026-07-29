@@ -1,0 +1,119 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>{{title}} — NIH 3D viewer</title>
+    <link rel="icon" href="data:," />
+    <link rel="stylesheet" href="/static/css/viewer.css" />
+    <script>
+      // Applied before first paint so the page never flashes the wrong theme.
+      (() => {
+        const stored = localStorage.getItem('viewer.theme');
+        const dark = stored ? stored === 'dark' : matchMedia('(prefers-color-scheme: dark)').matches;
+        document.documentElement.dataset.theme = dark ? 'dark' : 'light';
+        document.documentElement.lang = localStorage.getItem('viewer.lang') ?? 'en';
+      })();
+    </script>
+    <script type="importmap">
+      {
+        "imports": {
+          "three": "/vendor/three/build/three.module.js",
+          "three/addons/": "/vendor/three/addons/"
+        }
+      }
+    </script>
+  </head>
+  <body>
+    <div class="app">
+      <header class="topbar">
+        <div class="topbar__title">
+          <h1>{{title}}</h1>
+          <p>
+            {{author}} ·
+            <a href="{{licenseUrl}}" target="_blank" rel="noopener noreferrer">{{license}}</a> ·
+            <a href="{{entryUrl}}" target="_blank" rel="noopener noreferrer" data-i18n="link.entry"
+              >NIH 3D entry</a
+            >
+          </p>
+        </div>
+        <div class="topbar__stats">
+          <span data-i18n="stats.triangles" data-n="{{trianglesRaw}}">{{triangles}} triangles</span>
+          <span data-i18n="stats.bytes" data-n="{{megabytes}}">{{megabytes}} MB STL</span>
+          <button type="button" id="lang" class="chip" data-i18n-title="lang.title">DE</button>
+          <button type="button" id="theme" class="chip" data-i18n-title="theme.title" aria-label="theme">
+            <span aria-hidden="true" id="theme-icon">☾</span>
+          </button>
+        </div>
+      </header>
+
+      <main class="stage">
+        <canvas id="viewport"></canvas>
+
+        <div class="loader" id="loader" role="status" aria-live="polite">
+          <p class="loader__label" id="loader-label" data-i18n="loading.fetch">
+            Fetching model from NIH 3D…
+          </p>
+          <div class="loader__track"><div class="loader__bar" id="loader-bar"></div></div>
+          <p class="loader__hint" data-i18n="loading.hint" data-n="{{megabytes}}">
+            First load pulls {{megabytes}} MB from 3d.nih.gov and caches it on the server.
+          </p>
+        </div>
+
+        <div class="error" id="error" hidden>
+          <p id="error-message"></p>
+          <button type="button" id="retry" data-i18n="btn.retry">Retry</button>
+        </div>
+
+        <button
+          type="button"
+          id="panel-toggle"
+          class="panel-toggle"
+          aria-controls="panel"
+          aria-expanded="true"
+          data-i18n-title="panel.hide"
+          hidden
+        >
+          <span aria-hidden="true">☰</span>
+        </button>
+
+        <aside class="panel" id="panel" hidden>
+          <div class="panel__row">
+            <button type="button" data-view="reset" data-i18n="view.reset">Reset</button>
+            <button type="button" data-view="top" data-i18n="view.top">Occlusal</button>
+          </div>
+          <div class="panel__row">
+            <button type="button" data-view="front" data-i18n="view.front">Front</button>
+            <button type="button" data-view="side" data-i18n="view.side">Side</button>
+          </div>
+          <label class="panel__toggle">
+            <input type="checkbox" id="autorotate" />
+            <span data-i18n="toggle.autorotate">Auto-rotate</span>
+          </label>
+          <label class="panel__toggle">
+            <input type="checkbox" id="grid" checked />
+            <span data-i18n="toggle.grid">Ground grid</span>
+          </label>
+          <label class="panel__slider">
+            <span data-i18n="label.clip">Clip</span> <span id="clip-value">off</span>
+            <input type="range" id="clip" min="0" max="100" value="100" />
+          </label>
+          <dl class="panel__facts">
+            <div><dt data-i18n="facts.size">Size</dt><dd id="fact-size">—</dd></div>
+            <div><dt data-i18n="facts.units">Units</dt><dd>{{units}}</dd></div>
+          </dl>
+          <p class="panel__help" data-i18n="help">
+            Drag to orbit · scroll to zoom · right-drag or two-finger drag to pan
+          </p>
+        </aside>
+      </main>
+    </div>
+
+    <script
+      type="module"
+      src="/static/js/viewer.js"
+      data-mesh-url="{{meshUrl}}"
+      data-up-axis="{{upAxis}}"
+    ></script>
+  </body>
+</html>

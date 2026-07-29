@@ -1,0 +1,268 @@
+:root[data-theme='dark'] {
+  color-scheme: dark;
+  --bg: #0d1014;
+  --panel: rgba(20, 25, 32, 0.86);
+  --panel-solid: #141920;
+  --line: rgba(255, 255, 255, 0.12);
+  --control: rgba(255, 255, 255, 0.06);
+  --control-hover: rgba(255, 255, 255, 0.12);
+  --text: #e8ecf1;
+  --muted: #97a2b0;
+  --accent: #5bc0eb;
+}
+
+:root[data-theme='light'] {
+  color-scheme: light;
+  --bg: #eef1f5;
+  --panel: rgba(255, 255, 255, 0.9);
+  --panel-solid: #ffffff;
+  --line: rgba(15, 23, 32, 0.14);
+  --control: rgba(15, 23, 32, 0.05);
+  --control-hover: rgba(15, 23, 32, 0.1);
+  --text: #17202a;
+  --muted: #5b6875;
+  --accent: #0b6ea8;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  height: 100%;
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font: 14px/1.45 system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+}
+
+.app {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+.topbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px 24px;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 20px;
+  border-bottom: 1px solid var(--line);
+}
+
+.topbar h1 {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.topbar p {
+  margin: 2px 0 0;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.topbar a {
+  color: var(--accent);
+  text-decoration: none;
+}
+
+.topbar a:hover {
+  text-decoration: underline;
+}
+
+.topbar__stats {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  color: var(--muted);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+
+.stage {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+}
+
+#viewport {
+  display: block;
+  width: 100%;
+  height: 100%;
+  touch-action: none;
+}
+
+.loader,
+.error {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: min(420px, 84vw);
+  transform: translate(-50%, -50%);
+  padding: 20px 22px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--panel);
+  backdrop-filter: blur(8px);
+  text-align: center;
+}
+
+.loader__label {
+  margin: 0 0 12px;
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+}
+
+.loader__track {
+  height: 5px;
+  overflow: hidden;
+  border-radius: 3px;
+  background: var(--control-hover);
+}
+
+.loader__bar {
+  width: 0;
+  height: 100%;
+  background: var(--accent);
+  transition: width 0.15s linear;
+}
+
+.loader__hint,
+.panel__help {
+  margin: 12px 0 0;
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.error {
+  border-color: rgba(220, 90, 90, 0.5);
+}
+
+button {
+  padding: 7px 10px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--control);
+  color: var(--text);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+button:hover {
+  background: var(--control-hover);
+}
+
+button:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.chip {
+  min-width: 34px;
+  padding: 4px 8px;
+  line-height: 1.3;
+}
+
+.panel {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  width: 216px;
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--panel);
+  backdrop-filter: blur(8px);
+}
+
+.panel-toggle {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  z-index: 2;
+  width: 34px;
+  height: 30px;
+  padding: 0;
+  background: var(--panel);
+  backdrop-filter: blur(8px);
+}
+
+/* When the panel is open the toggle sits just left of it. */
+.panel-toggle[aria-expanded='true'] {
+  right: 244px;
+}
+
+.panel__row {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.panel__row button {
+  flex: 1;
+}
+
+.panel__toggle {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  padding: 4px 0;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.panel__slider {
+  display: block;
+  margin-top: 10px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.panel__slider input {
+  width: 100%;
+  margin-top: 6px;
+  accent-color: var(--accent);
+}
+
+.panel__facts {
+  margin: 12px 0 0;
+  padding-top: 10px;
+  border-top: 1px solid var(--line);
+  font-size: 12px;
+}
+
+.panel__facts div {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.panel__facts dt {
+  color: var(--muted);
+}
+
+.panel__facts dd {
+  margin: 0;
+  font-variant-numeric: tabular-nums;
+}
+
+@media (max-width: 640px) {
+  .panel {
+    top: auto;
+    right: 12px;
+    bottom: 12px;
+    left: 12px;
+    width: auto;
+  }
+
+  .panel-toggle,
+  .panel-toggle[aria-expanded='true'] {
+    top: 12px;
+    right: 12px;
+  }
+}
