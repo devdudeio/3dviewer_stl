@@ -457,7 +457,9 @@ async function openQr() {
   if (qrShownFor !== url) {
     try {
       const { default: encodeQR } = await import('/vendor/qr/index.js');
-      el.qrCode.innerHTML = encodeQR(url, 'svg', { ecc: 'medium', border: 2 });
+      // border: 4 is the quiet zone the QR spec requires. With 2, longer URLs
+      // produce enough modules that scanners fail to lock onto the code.
+      el.qrCode.innerHTML = encodeQR(url, 'svg', { ecc: 'medium', border: 4 });
       qrShownFor = url;
     } catch {
       el.qrCode.textContent = url;
