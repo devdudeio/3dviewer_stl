@@ -10,9 +10,16 @@ const config = document.querySelector('script[data-mesh-url]')?.dataset ?? {};
 const meshUrl = config.meshUrl ?? '/api/model/mesh.stl';
 /** 'glb' for the compressed build artefact, 'stl' for the raw NIH download. */
 const meshFormat = config.meshFormat === 'glb' ? 'glb' : 'stl';
-/** Rotation about X that brings the file's up axis onto three.js' +Y. */
-const UP_AXIS_TILT = { y: 0, '-y': Math.PI, z: -Math.PI / 2, '-z': Math.PI / 2 };
-let upTilt = UP_AXIS_TILT[config.upAxis] ?? 0;
+/** Rotation [x, z] that brings the file's up axis onto three.js' +Y. */
+const UP_AXIS_TILT = {
+  y: [0, 0],
+  '-y': [Math.PI, 0],
+  z: [-Math.PI / 2, 0],
+  '-z': [Math.PI / 2, 0],
+  x: [0, Math.PI / 2],
+  '-x': [0, -Math.PI / 2],
+};
+let upTilt = UP_AXIS_TILT[config.upAxis] ?? UP_AXIS_TILT.y;
 
 const THEMES = {
   dark: { background: 0x0d1014, grid: [0x35414f, 0x222a33], icon: '☾' },
@@ -394,7 +401,9 @@ function parseStl(buffer) {
         new THREE.Vector3(...data.max),
       );
       geometry.boundingSphere = geometry.boundingBox.getBoundingSphere(new THREE.Sphere());
-      resolve(new THREE.Mesh(geometry, material));
+      const parsed = new THREE.Mesh(geometry, material);
+      parsed.userData.axisArea = data.axisArea;
+      resolve(parsed);
     };
     worker.postMessage(buffer, [buffer]);
   });
@@ -454,17 +463,17 @@ async function loadLocalFile(file) {
     const kind = detectFormat(buffer, file.name);
     if (!kind) throw new Error(t('error.unsupported'));
 
-    // Uploads carry no orientation metadata: glTF is defined Y-up, while STL
-    // has no convention beyond "Z-up" being usual for printing. The panel's
-    // up-axis control is there because neither guess is reliable.
-    const guessedAxis = kind === 'glb' ? 'y' : 'z';
-    el.upAxis.value = guessedAxis;
-    upTilt = UP_AXIS_TILT[guessedAxis];
-
     el.loaderLabel.textContent = t('loading.building');
     await new Promise((resolve) => requestAnimationFrame(() => setTimeout(resolve, 0)));
 
-    const object = kind === 'glb' ? await parseGlb(buffer, { ownMaterials: true }) : await parseStl(buffer);
+    const object =
+      kind === 'glb' ? await parseGlb(buffer, { ownMaterials: true }) : await parseStl(buffer);
+
+    // glTF defines +Y as up, so that is taken at its word. STL defines nothing,
+    // so the orientation is inferred from the geometry the parser measured.
+    const axis = kind === 'glb' ? 'y' : guessUpAxis(object.userData.axisArea);
+    el.upAxis.value = axis;
+    upTilt = UP_AXIS_TILT[axis] ?? UP_AXIS_TILT.y;
 
     clearModel();
     // Before addMesh: it refreshes the readouts, which depend on this state.
@@ -539,7 +548,7 @@ function countTriangles(object) {
 /** Restores the model this page was built for. */
 async function restoreOriginal() {
   clearModel();
-  upTilt = UP_AXIS_TILT[config.upAxis] ?? 0;
+  upTilt = UP_AXIS_TILT[config.upAxis] ?? UP_AXIS_TILT.y;
   setCustomFile(null);
   applyLanguage();
   await load();
@@ -576,7 +585,7 @@ function addMesh(object) {
   centring.position.copy(center).negate();
 
   const pivot = new THREE.Group();
-  pivot.rotation.x = upTilt;
+  pivot.rotation.set(upTilt[0], 0, upTilt[1]);
   pivot.add(centring);
   scene.add(pivot);
   modelRoot = pivot;
@@ -606,10 +615,26 @@ function refreshFraming() {
 
 /** Re-tilts an already-loaded model without re-parsing it. */
 function applyUpAxis(axis) {
-  upTilt = UP_AXIS_TILT[axis] ?? 0;
+  upTilt = UP_AXIS_TILT[axis] ?? UP_AXIS_TILT.y;
   if (!modelRoot) return;
-  modelRoot.rotation.x = upTilt;
+  modelRoot.rotation.set(upTilt[0], 0, upTilt[1]);
   refreshFraming();
+}
+
+/**
+ * Picks the up axis from the surface area facing each direction, measured
+ * while parsing. The largest flat side of a scan or a print is its base, so
+ * "up" is the opposite of whichever direction that side faces. Only trusted
+ * when it clearly dominates — an unremarkable shape like a box has six equal
+ * sides and gets the format's convention instead.
+ */
+function guessUpAxis(axisArea) {
+  if (!axisArea) return 'z';
+  const AXES = ['x', '-x', 'y', '-y', 'z', '-z'];
+  const ranked = axisArea.map((area, i) => ({ axis: AXES[i], area })).sort((a, b) => b.area - a.area);
+  if (ranked[0].area < ranked[1].area * 1.5) return 'z';
+  // The dominant face points down, so flip its sign to get up.
+  return ranked[0].axis.startsWith('-') ? ranked[0].axis.slice(1) : `-${ranked[0].axis}`;
 }
 
 async function load() {

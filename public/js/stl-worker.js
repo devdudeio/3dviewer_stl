@@ -7,8 +7,8 @@ import { parseBinaryStl } from './stl-parse.js';
  */
 self.onmessage = ({ data }) => {
   try {
-    const { position, normal, min, max } = parseBinaryStl(data);
-    self.postMessage({ position, normal, min, max }, [position.buffer, normal.buffer]);
+    const { position, normal, min, max, axisArea } = parseBinaryStl(data);
+    self.postMessage({ position, normal, min, max, axisArea }, [position.buffer, normal.buffer]);
   } catch (error) {
     self.postMessage({ error: String(error) });
   }

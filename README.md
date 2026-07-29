@@ -55,10 +55,17 @@ installed `three` package.
   file is read with `File.arrayBuffer()` and parsed in the tab — nothing is uploaded, and the
   static deployment has no endpoint that could accept an upload. Binary and ASCII STL and
   self-contained GLB are supported; `.gltf` with external buffers is not.
-  - Neither format carries reliable orientation or units, so the panel gains an **up-axis**
-    selector (default: +Z for STL, +Y for GLB per the glTF spec) and the units readout switches
-    to *unknown*. The header swaps to the file name so the NIH attribution never describes
-    someone else's model.
+  - **Orientation is measured, not guessed.** STL carries none, so while parsing, the worker
+    accumulates the surface area facing each of the six axis directions (counting only faces
+    within 15° of an axis). The largest flat side of a scan or print is its base, so "up" is the
+    opposite of whichever way that side faces. On the NIH cast, +Y holds 61% of the axis-aligned
+    area — six times the runner-up — which correctly yields −Y. When no direction dominates
+    (a box has six equal sides) it falls back to the STL convention of +Z. GLB is taken at its
+    word: glTF defines +Y as up. The panel's **up-axis** selector overrides either, and re-tilts
+    without re-parsing.
+  - Units are left as *unknown* rather than claiming millimetres — STL has no units and glTF's
+    convention is metres. The header swaps to the file name so the NIH attribution never
+    describes someone else's model.
 - **QR** button renders a QR code for the page's own address, for handing the viewer to a phone
   mid-demo. It encodes `location.origin + location.pathname` at runtime, so it follows whatever
   host the page is served from, and prints the URL underneath — which also makes it obvious when

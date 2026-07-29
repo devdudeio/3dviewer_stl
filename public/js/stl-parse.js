@@ -25,6 +25,12 @@ export function parseBinaryStl(buffer) {
   const min = [Infinity, Infinity, Infinity];
   const max = [-Infinity, -Infinity, -Infinity];
 
+  // Surface area facing each axis (+X, -X, +Y, -Y, +Z, -Z), counting only
+  // faces within ~15 deg of that axis. STL carries no orientation, so the
+  // largest flat side is the best available clue to which way is down.
+  const axisArea = [0, 0, 0, 0, 0, 0];
+  const AXIS_ALIGNED = Math.cos((15 * Math.PI) / 180);
+
   let offset = 84;
   let i = 0;
   for (let tri = 0; tri < triangles; tri++) {
@@ -54,9 +60,33 @@ export function parseBinaryStl(buffer) {
     }
 
     offset += 2; // per-triangle attribute byte count, unused
+
+    // Geometric normal from the vertices: the stored one is often unreliable,
+    // and its length gives twice the triangle's area for free.
+    const ax = position[i - 9];
+    const ay = position[i - 8];
+    const az = position[i - 7];
+    const abx = position[i - 6] - ax;
+    const aby = position[i - 5] - ay;
+    const abz = position[i - 4] - az;
+    const acx = position[i - 3] - ax;
+    const acy = position[i - 2] - ay;
+    const acz = position[i - 1] - az;
+    const cx = aby * acz - abz * acy;
+    const cy = abz * acx - abx * acz;
+    const cz = abx * acy - aby * acx;
+    const length = Math.sqrt(cx * cx + cy * cy + cz * cz);
+    if (length > 0) {
+      const area = length / 2;
+      const components = [cx / length, cy / length, cz / length];
+      for (let axis = 0; axis < 3; axis++) {
+        if (components[axis] >= AXIS_ALIGNED) axisArea[axis * 2] += area;
+        else if (components[axis] <= -AXIS_ALIGNED) axisArea[axis * 2 + 1] += area;
+      }
+    }
   }
 
-  return { position, normal, min, max, triangles };
+  return { position, normal, min, max, triangles, axisArea };
 }
 
 /** True for a binary STL whose triangle count matches its byte length. */
