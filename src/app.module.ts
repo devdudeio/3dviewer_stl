@@ -36,6 +36,12 @@ const projectRoot = join(__dirname, '..');
         serveRoot: '/vendor/three/addons',
         serveStaticOptions: { index: false, maxAge: '1d', immutable: true },
       },
+      // QR encoder, loaded only when the share button is used.
+      {
+        rootPath: join(projectRoot, 'node_modules', '@paulmillr', 'qr', 'esm'),
+        serveRoot: '/vendor/qr',
+        serveStaticOptions: { index: false, maxAge: '1d', immutable: true },
+      },
     ),
   ],
   controllers: [ViewerController],

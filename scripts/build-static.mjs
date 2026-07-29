@@ -65,6 +65,10 @@ await cp(
   join(projectRoot, 'node_modules', 'three', 'build', 'three.core.js'),
   join(outDir, 'vendor', 'three', 'build', 'three.core.js'),
 );
+await cp(
+  join(projectRoot, 'node_modules', '@paulmillr', 'qr', 'esm', 'index.js'),
+  join(outDir, 'vendor', 'qr', 'index.js'),
+);
 for (const addon of THREE_ADDONS) {
   await cp(
     join(projectRoot, 'node_modules', 'three', 'examples', 'jsm', addon),

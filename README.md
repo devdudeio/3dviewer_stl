@@ -1,5 +1,7 @@
 # NIH 3D tooth viewer
 
+**Live demo: [3dviewer-stl.vercel.app](https://3dviewer-stl.vercel.app)**
+
 A NestJS app that serves one page: an interactive WebGL viewer for the NIH 3D Print Exchange
 entry [3DPX-003002 — "Upper dental tooth model"](https://3d.nih.gov/entries/3dpx-003002)
 (maxillary teeth with base) by Michael D. Scherer, DMD, MS, FACP, released under
@@ -49,6 +51,10 @@ installed `three` package.
 - Drag to orbit, scroll to zoom, right-drag to pan.
 - View presets (reset / occlusal / front / side), auto-rotate, ground grid, section-plane slider.
 - Panel can be hidden with its toggle or the `H` key.
+- **QR** button renders a QR code for the page's own address, for handing the viewer to a phone
+  mid-demo. It encodes `location.origin + location.pathname` at runtime, so it follows whatever
+  host the page is served from, and prints the URL underneath — which also makes it obvious when
+  you are showing a `localhost` address that nobody else can reach.
 - German / English toggle and light / dark theme, both persisted in `localStorage`.
 - Download progress is byte-accurate even under gzip, via `X-Uncompressed-Length`.
 
@@ -109,6 +115,8 @@ viewer carries the node's scale on the object instead of baking it into the attr
 
 ## Deploying to Vercel (free tier)
 
+Deployed at [3dviewer-stl.vercel.app](https://3dviewer-stl.vercel.app).
+
 The server design cannot be deployed as-is, for two reasons worth knowing before you try:
 
 - A Vercel Function caps its **response body at 4.5 MB**, and the STL route streams 69 MB.
@@ -123,8 +131,8 @@ npm run build:mesh      # only when the mesh changes; the .glb is committed
 npm run build:static    # prerenders the page into out/  (8.3 MB total)
 ```
 
-`out/` contains `index.html`, the viewer assets, the GLB, and the eight three.js modules the
-page actually imports. `vercel.json` already sets the build command, the output directory, and
+`out/` contains `index.html`, the viewer assets, the GLB, the eight three.js modules the page
+actually imports, and the QR encoder. `vercel.json` already sets the build command, the output directory, and
 cache headers (immutable for the content-hashed GLB, revalidate for the rest).
 
 Then either:

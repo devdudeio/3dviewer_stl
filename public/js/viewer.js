@@ -40,6 +40,11 @@ const el = {
   lang: document.getElementById('lang'),
   theme: document.getElementById('theme'),
   themeIcon: document.getElementById('theme-icon'),
+  qr: document.getElementById('qr'),
+  qrModal: document.getElementById('qr-modal'),
+  qrCode: document.getElementById('qr-code'),
+  qrUrl: document.getElementById('qr-url'),
+  qrClose: document.getElementById('qr-close'),
 };
 
 /* ------------------------------------------------------------------ i18n */
@@ -436,6 +441,39 @@ async function load() {
   }
 }
 
+/* ---------------------------------------------------------------- qr code */
+
+/**
+ * QR code for the page's own address, so the viewer can be handed to a phone
+ * during a demo. Encoded at runtime rather than at build time so it follows
+ * whatever host the page is actually served from; the URL is printed beneath
+ * it, which also makes a localhost address obvious rather than confusing.
+ */
+let qrShownFor = null;
+
+async function openQr() {
+  const url = `${location.origin}${location.pathname}`;
+
+  if (qrShownFor !== url) {
+    try {
+      const { default: encodeQR } = await import('/vendor/qr/index.js');
+      el.qrCode.innerHTML = encodeQR(url, 'svg', { ecc: 'medium', border: 2 });
+      qrShownFor = url;
+    } catch {
+      el.qrCode.textContent = url;
+    }
+  }
+
+  el.qrUrl.textContent = url;
+  el.qrModal.hidden = false;
+  el.qrClose.focus();
+}
+
+function closeQr() {
+  el.qrModal.hidden = true;
+  el.qr.focus();
+}
+
 /* --------------------------------------------------------------- controls */
 
 let modelLoaded = false;
@@ -498,8 +536,20 @@ function bindControls() {
 
   el.retry.addEventListener('click', load);
 
+  el.qr.addEventListener('click', openQr);
+  el.qrClose.addEventListener('click', closeQr);
+  // Clicking the backdrop, but not the card itself, dismisses the dialog.
+  el.qrModal.addEventListener('click', (event) => {
+    if (event.target === el.qrModal) closeQr();
+  });
+
   document.addEventListener('keydown', (event) => {
-    if (event.key === 'h' && !event.metaKey && !event.ctrlKey && !el.panelToggle.hidden) {
+    const qrOpen = !el.qrModal.hidden;
+    if (event.key === 'Escape' && qrOpen) {
+      closeQr();
+      return;
+    }
+    if (event.key === 'h' && !qrOpen && !event.metaKey && !event.ctrlKey && !el.panelToggle.hidden) {
       setPanelOpen(!panelOpen());
     }
   });
